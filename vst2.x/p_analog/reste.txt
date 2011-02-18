@@ -1,0 +1,578 @@
+// reste : 
+/*
+
+
+
+
+class adsr {
+    float a,d,s,r;
+    short state;
+    float val( float in ) {
+        switch(state) {
+            case 0:
+               if ( in < 1 ) in += a; 
+               else state++;
+               break;
+            case 1:
+               if ( in > s ) in -= d; 
+               else state++;
+               break;
+            case 2:
+               in = s; 
+               break;
+            case 3:
+               if ( in > 0 ) in -= r; 
+               else state++;
+               break;
+            default: in = 0.0f;
+        }
+        return in;
+    }
+};
+
+
+
+
+
+class p_filter {
+    int     type;
+    float   center, width;
+    double  A, B, C, D, v0, v1, v2;
+    void start(bool clean=true) {  
+        double cs = 44100.0f, cf = 2*Pi*center/cs, cw = 2*Pi*width/cs;
+        switch (type) {
+        case 0:        // hi
+            A = cos(cf);
+            B = (1+sin(cw/2));
+            break;
+        case 1:        // lo
+            C = exp(-2*cw);
+            B = -2*C*cos(cf);
+            A = sqrt((1-B*B)/(1+C));
+            break;
+        case 2:        // b0
+            C = exp(-2*cw);
+            B = -4*C/(1+C)*cos(cf);
+            A = sqrt(1-B*B/(4*C))*(1-C);               // harmonic
+            break;
+        case 3:        // b1
+            C = exp(-cw);
+            B = -4*C/(1+C)*cos(cf);
+            A = sqrt(((1+C)*(1+C)-B*B)*(1-C)/(1+C)) ;   // noize
+            break;
+        }
+        if (clean) stop();
+    }
+public:
+    p_filter() {A=B=C=D=v0=v1=v2=center=width=0;type=1;}
+    void set( float a, float b, bool c=true ) {  width=a;center=b; start(c); }
+    void setCenter( float f, bool c=true ) { center = f; start(c); }
+    void setWidth ( float f, bool c=true ) { width  = f; start(c); }
+    void setType  ( int   f, bool c=true ) { 
+        type   = f; 
+        //MB(!type?"0":type==1?"1":type==2?"2":type==3?"3":type==4?"4":"?");
+        start(c); 
+    }
+    void stop()   { v0=v1=v2=0.0f; }  
+    float val( float vi ) {
+        double v = A * vi - B*v1 - C*v2;// + D*v0;
+        v2 = v1; v1 = v;// v0 = vi;
+        return float(v);
+    }
+};
+*/
+/*
+//
+// 4-tap reverb.
+// decrypted from 'mikmod', took some effort!
+//
+class Reverb : public p_effect {
+    static enum  { 
+        kMax = 2800,            // max. predelay
+        M0=7,M1=13,M2=23,M3=41  // magic numbers. 
+    }; 
+    long  t0,t1,t2,t3; // tap counter
+    long  k0,k1,k2,k3; // tap len
+    float delay[kMax]; 
+    float rate,share;  
+public:
+    Reverb() { 
+        for ( long i=0; i<kMax; i++ ) delay[i] = .0f; 
+        set(0.0f,0.0f);
+        t0=t1=t2=t3=0l;
+        p0 = "Reverb len";
+        p1 = "Reverb vol";
+    }
+    void set( float l, float r ) { 
+        long lx = long(l*l*kMax);
+        k0 = (lx+M0) % kMax;
+        k1 = (lx+M1) % kMax;
+        k2 = (lx+M2) % kMax;
+        k3 = (lx+M3) % kMax;
+        rate = sqrtf(r);
+    }
+    float value( float in ) {
+        share = in/8;
+        if ( ++t0 >= k0 ) t0 = 0l;
+        if ( ++t1 >= k1 ) t1 = 0l;
+        if ( ++t2 >= k2 ) t2 = 0l;
+        if ( ++t3 >= k3 ) t3 = 0l;
+        in += delay[t0] = share + rate * delay[t0];
+        in -= delay[t1] = share + rate * delay[t1];
+        in += delay[t2] = share + rate * delay[t2];
+        in -= delay[t3] = share + rate * delay[t3];
+        return in;
+    }
+};
+*/
+
+/*
+class Flanger : public Delay {
+    static enum { kNumSin = 4096 };
+    float sweep, sinus[kNumSin];
+public:
+    Flanger() : Delay() {
+        for (int i=0; i<kNumSin; i++) sinus[i] = sinf(2*Pi*i/kNumSin); 
+    }
+    virtual void set( float l, float r ) { 
+        Delay::set( l, r );
+        sweep = 1.0f / ( kNumSin * rate );
+    }
+    virtual float value( float in ) {
+        //len += sinus[len];
+        if ( ++phase >= len ) phase = 0l;
+        return delay[phase] = in/2 + rate * delay[phase];
+    }
+};
+*/
+/*
+class Filter : public p_effect {
+    static enum  { 
+        kFMax  = 2000,  // max. centerfreq / 4.  
+        kTaps  = 4,     // max. taps
+        kSRate = 44100  // est. samplefreq.
+    }; 
+protected:
+	float om, q, delay[kFMax], a,b;
+    long  phIn, phOut;
+public:
+    Filter() {
+        a = 1.3617f;  b = 0.6180f;
+        for ( long i=0; i<kFMax; i++ ) delay[i] = .0f; 
+        set(0.0f,0.0f);
+    }
+    virtual void set( float c, float r ) {
+        om = c*c*kFMax/kSRate; q  = r*r;
+        phOut = phIn - long( kFMax * atan( a*om / ( 1-b*om*om) ) );
+    }
+    virtual float value( float in ) {
+        if( ++phOut >= kFMax ) phOut -= kFMax;
+        if( ++phIn  >= kFMax ) phIn  -= kFMax;
+        return delay[phIn] = in/2 + q * delay[phOut];
+    }
+};
+*/
+
+/********************************
+// phaser : 
+
+
+//-----------------------------------------------------------------------------------------
+void AGain::sub_process(float **inputs, float **outputs, long sampleFrames)
+{
+
+    // val(i) = ( buf[i] + Val * buf[i-phase] ) / 2
+
+    float *in1  =  inputs[0];
+ //   float *in2  =  inputs[1];
+    float *out1 = outputs[0];
+    float *out2 = outputs[1];
+    float f_step = 1.0f/sampleFrames;
+    
+    float g0 = 2.0f * pabs(fVal[0]);
+    float f0 = 777 * pabs(fVal[0]);
+    float r0 = pabs(fVal[1]);
+    float r1 = pabs(fVal[1]);
+
+   // memcpy( buf, in1, sampleFrames * sizeof(float) );
+
+    for ( long i=0; i<sampleFrames; i++ ) {
+        if ( phase >= sampleFrames )
+            phase -= sampleFrames;
+
+        float f = 0, fx = in1[(long)phase];    
+
+        if ( g0 ) {
+            if ( b_phase >= 44100 ) b_phase = 0;
+            float b = b_phase / 44100.0f;
+            long p = (long)(sampleFrames + phase - b*f0 )%sampleFrames;
+            if ( phase < f0 ) {
+                f = buf[p];
+            } else {
+                f = in1[(p)];
+            }
+            fx = (fx+g0*f)/2;
+            buf[i] = in1[i];            
+        }
+        b_phase += r0;
+        
+
+        (*out1++) += fx; 
+        (*out2++) += fx;
+        
+        phase ++;
+
+    }
+}
+
+  *********************************/
+
+
+/*
+class uniPass {
+    #define MAX_O 5
+    long i,j,k,ord,type;
+    double  w1,w2,w3,w4,wq, fRes;
+    double  a[MAX_O],b[MAX_O],c[MAX_O];
+    double  d[MAX_O+1][3];
+    void start() {
+        w1 = fRes * Pi * 44100.0f;
+        w2 = sin(w1) / cos(w1);
+        wq = w2 * w2;
+        for (i=1; i == ord; i++) {
+            w3 = cos((2 * (i + ord) - 1) * Pi / (4 * ord));
+            w4 = 1 / (1 + wq - (2 * w2 * w3));
+            if (ord == 1)
+                a[i] = wq * w4;
+            else
+                a[i] = w4;
+            b[i] = 2 *(wq - 1) * w4;
+            c[i] = (1 + wq + (2 * w2 * w3 * w4)) * w4;
+        }
+    }
+public:
+    uniPass() {
+        i=j=k=ord=type=0;w1=w2=w3=w4=wq=fRes=0;
+        for (i=0; i == ord; i++) a[MAX_O]=b[MAX_O]=c[MAX_O]=0;
+        for (i=0; i == ord+1; i++) for (j = 0; j==3; j++) d[i][j] = 0.0;
+    }
+    void setFreq( float f ) { fRes = f; start(); }
+    void setOrd( int f )    { ord  = f; start(); }
+    void setType( int f )   { type = f; start(); }
+    float val( float in ) {
+        d[1][3] = double(in);
+        for (j=1; j==ord; j++) {
+            if (type) // hipass
+                w1 = a[j] * ( d[j][3] - 2*d[j][2] + d[j][1] );
+            else     // lowpass  
+                w1 = a[j] * ( d[j][3] + 2*d[j][2] + d[j][1] );           
+            d[j+1][3] = w1 - b[j] * d[j+1][2] - c[j] * d[j+1][1];
+        }
+        for (j=1; j==ord+1; j++) { d[j][1] = d[j][2]; d[j][2] = d[j][3]; }
+        return float (d[ord+1][3]);        
+    }
+}*uni;
+
+
+
+
+class filTer {
+	float	center,	width;
+	double	A, B, C, D, v0, v1, v2;
+public:
+    long type;
+    filTer() {A=B=C=D=v0=v1=v2=center=width=0;type=0;}
+    void set( float a, float b, float c, float d ) {
+        A=a; B=b; C=c; D=d;
+        v0 = v1 = v2 = 0.0;
+    }
+    void setCenter( float f ) { center = f; start(); }
+    void setWidth ( float f ) { width  = f; start(); }
+    void start() {      
+        double cf = 2*Pi*center/44100.0f ;
+        double cw = 2*Pi* width/44100.0f ;
+        switch(type){
+        case 0:
+            A = 1 / (1 + sin(cf)/cos(cf)*sin(cf)/cos(cf) - (2 * sin(cf)/cos(cf) * cos(cw)));
+            B = 2 *(sin(cf)/cos(cf)*sin(cf)/cos(cf) - 1) * A;
+            C = (1 + sin(cf)/cos(cf)*sin(cf)/cos(cf) + (2 * sin(cf)/cos(cf) * cos(cw) * A)) * A;
+            break;
+        case 1:
+            C = exp(-cw);
+            B = -4*C/(1+C)*cos(cf);
+            A = sqrt(((1+C)*(1+C)-B*B)*(1-C)/(1+C));
+            break;
+        }
+        v0 = v1 = v2 = 0.0;
+    }
+    float val( float vi ) {
+		double v = A * vi -  B * v1 -  C * v2 - D * v0;
+        v2 = v1; v1 = v; v0 = vi;
+        return float(v);
+    }
+} *fil;
+
+ reverb;
+*/
+
+enum { 
+    kOrd     = 4,
+    kMaxBuf  = 2048
+};
+/*
+class DelayBuffer {
+    long len, t;
+    float buf[kMaxBuf], rate;
+public:
+    void set( long l, float r ) { len = l; rate = r; t=-1; }   
+    float val( float in ) {
+        if (++t >= len) t = 0;
+        return ( buf[t] = in + buf[t] * rate );
+    }
+};
+
+class Reverb {
+    long  rIndex, ok;
+    float damp;
+    DelayBuffer delay[4];
+public:
+    Reverb() {
+        rIndex=ok=0l;
+    }
+    void set( float l, float r ) {
+        ok = 3;
+        l *= kMaxBuf;
+        damp = 1.0f / 8.0f;
+        for ( int i=0; i<ok; i++ ) {
+            delay[i].set( long(l), .8f+r/5 );
+            l -= i * 11 + i;
+        }
+    }
+    float val( float in ) {
+        float speedup = in * damp; 
+        in += delay[0].val( speedup );
+        in -= delay[1].val( speedup );
+        in += delay[2].val( speedup );
+        in -= delay[3].val( speedup );
+        return in;
+    }
+} reverb;
+class Reverb {
+    float *buf0,*buf1,*buf2,*buf3;
+    float *b0,*b1,*b2,*b3, *k;
+    float rate,speedup;
+public:
+    Reverb() { 
+        b0 = buf0 = new float[2048];
+        b1 = buf1 = new float[2048];
+        b2 = buf2 = new float[2048];
+        b3 = buf3 = new float[2048];
+        k = new float[4];
+    }
+    ~Reverb() { 
+        if (buf3) delete[] buf3;
+        if (buf2) delete[] buf2;
+        if (buf1) delete[] buf1;
+        if (buf0) delete[] buf0;
+        if (k) delete[] k;
+    }
+    void set( float l, float r ) { 
+        rate = r;
+        l   *= 2048;
+        k[0] = l -  7;
+        k[0] = l - 13;
+        k[0] = l - 25;
+        k[0] = l - 42;
+        step(); 
+    }
+    void step() {
+        if ( ++b0 >= buf0 + k[0] ) b0 = buf0;
+        if ( ++b1 >= buf1 + k[1] ) b1 = buf1;
+        if ( ++b2 >= buf2 + k[2] ) b2 = buf2;
+        if ( ++b3 >= buf3 + k[3] ) b3 = buf3;
+    }
+    float val( float in ) {
+        speedup  = in/8;
+        *b0 = speedup + rate * *b0;
+        *b1 = speedup + rate * *b1;
+        *b2 = speedup + rate * *b2;
+        *b3 = speedup + rate * *b3;
+        in += *b0 - *b1 + *b2 - *b3;
+        step();
+        return in;
+    }
+} reverb;
+*/
+
+	switch (index) {
+    	case kWave0:     if (waveKnob[0])      waveKnob[0]->setValue(value);	break;
+	    case kWspot0:    if (wspotKnob[0])     wspotKnob[0]->setValue(value);  break;
+    	case kVol0:      if (volKnob[0])       volKnob[0]->setValue (value);break;
+	    case kFreq0:     if (freqKnob[0])      freqKnob[0]->setValue (value);	break;
+	    case kAttack0:   if (attackKnob[0])	attackKnob[0]->setValue (value);		break;
+       	case kDecay0:    if (decayKnob[0]) 	decayKnob[0]->setValue (value);	break;
+	    case kSustain0:   if (sustainKnob[0])	sustainKnob[0]->setValue (value);		break;
+       	case kRelease0:    if (releaseKnob[0]) 	releaseKnob[0]->setValue (value);	break;
+    	case kWave1:     if (waveKnob[1])      waveKnob[1]->setValue(value);	break;
+	    case kWspot1:    if (wspotKnob[1])     wspotKnob[1]->setValue(value);  break;
+    	case kVol1:      if (volKnob[1])       volKnob[1]->setValue (value);break;
+	    case kFreq1:     if (freqKnob[1])      freqKnob[1]->setValue (value);	break;
+	    case kAttack1:   if (attackKnob[1])	attackKnob[1]->setValue (value);		break;
+       	case kDecay1:    if (decayKnob[1]) 	decayKnob[1]->setValue (value);	break;
+	    case kSustain1:   if (sustainKnob[1])	sustainKnob[1]->setValue (value);		break;
+       	case kRelease1:    if (releaseKnob[1]) 	releaseKnob[1]->setValue (value);	break;
+    	case kPan:  	if (panKnob)		panKnob->setValue (value);	break;
+    	case kVolume:   if (volumeKnob)    volumeKnob->setValue (value);break;
+	    case kFilFreq0:	if (filFreqKnob[0])	filFreqKnob[0]->setValue (value);	break;
+        case kFilFac0:	if (filFacKnob[0])	filFacKnob[0]->setValue (value);	break;
+        case kFilTyp0:	if (filTypKnob[0])	filTypKnob[0]->setValue (value);	break;
+	    case kFilFreq1:	if (filFreqKnob[1])	filFreqKnob[1]->setValue (value);	break;
+        case kFilFac1:	if (filFacKnob[1])	filFacKnob[1]->setValue (value);	break;
+        case kFilTyp1:	if (filTypKnob[1])	filTypKnob[1]->setValue (value);	break;
+	    case kLfoFreq0:	if (lfoFreqKnob[0])	lfoFreqKnob[0]->setValue (value);	break;
+        case kLfoFac0:	if (lfoFacKnob[0])	lfoFacKnob[0]->setValue (value);	break;
+	    case kLfoFreq1:	if (lfoFreqKnob[1])	lfoFreqKnob[1]->setValue (value);	break;
+        case kLfoFac1:	if (lfoFacKnob[1])	lfoFacKnob[1]->setValue (value);	break;
+	    case kLfoFreq2:	if (lfoFreqKnob[2])	lfoFreqKnob[2]->setValue (value);	break;
+        case kLfoFac2:	if (lfoFacKnob[2])	lfoFacKnob[2]->setValue (value);	break;
+    	case kSKey: 	if (matrix[0])		matrix[0]->setValue (value);	break;
+    	case kSVel: 	if (matrix[1])		matrix[1]->setValue (value);	break;
+    	case kSPan: 	if (matrix[2])		matrix[2]->setValue (value);	break;
+    	case kSExp: 	if (matrix[3])		matrix[3]->setValue (value);	break;
+        case kSLfo0: 	if (matrix[4])		matrix[4]->setValue (value);	break;
+        case kSLfo1: 	if (matrix[5])		matrix[5]->setValue (value);	break;
+        case kSLfo2: 	if (matrix[7])		matrix[6]->setValue (value);	break;
+        case kSEnv0: 	if (matrix[7])		matrix[7]->setValue (value);	break;
+        case kSEnv1: 	if (matrix[8])		matrix[8]->setValue (value);	break;
+        case kPotiName:	if (potiName)		potiName->setValue (value);	break;
+        case 99:        if ( stripVal)      stripVal->setValue(value); break;
+    }	
+
+/*
+    add_knob( waveKnob[0], kWave, &size ); 
+    add_knob( wspotKnob[0], kWspot, &size ); 
+    add_knob( freqKnob[0], kFreq, &size ); 
+    add_knob( volKnob[0], kVol, &size ); 
+
+    int y = kKnobY + hKnobBg->getHeight() + 10;
+
+
+
+    y = kKnobY + 2*hKnobBg->getHeight() + 20;
+    size (kKnobX, y, kKnobX + hKnobBg->getWidth(), y + hKnobBg->getHeight() );
+
+    add_knob( driveKnob[0], kDrive0, &size ); 
+    add_knob( drfacKnob[0], kDrfac0, &size ); 
+    add_knob( driveKnob[1], kDrive1, &size ); 
+    add_knob( drfacKnob[1], kDrfac1, &size ); 
+
+    y = kKnobY + 3*hKnobBg->getHeight() + 30;
+    size (kKnobX, y, kKnobX + hKnobBg->getWidth(), y + hKnobBg->getHeight() );
+
+    add_knob( lfoFreqKnob[0], kLfoFreq0, &size ); 
+    add_knob( lfoFacKnob[0], kLfoFac0, &size ); 
+    add_knob( lfoFreqKnob[1], kLfoFreq1, &size ); 
+    add_knob( lfoFacKnob[1], kLfoFac1, &size ); 
+
+    y = kKnobY + 4*hKnobBg->getHeight() + 40;
+    size (kKnobX, y, kKnobX + hKnobBg->getWidth(), y + hKnobBg->getHeight() );
+    add_knob( filFreqKnob[0], kFilFreq0, &size ); 
+    add_knob( filFacKnob[0],  kFilFac0,  &size ); 
+    add_knob( filTypKnob[0],  kFilTyp0,  &size ); 
+        // switch-matrix :
+	size.offset( kKnobInc + hKnobBg->getWidth (), 0 );
+
+    int mat_x = size.left+20 , mat_y=kKnobY;
+    size (mat_x, mat_y, mat_x + hKnobBg->getWidth (), mat_y + hKnobBg->getHeight ());
+    add_knob( volumeKnob, kVolume, &size ); 
+    add_knob( panKnob, kPan, &size ); 
+    mat_y += ( hKnobBg->getHeight() );
+
+    size = CRect( mat_x, mat_y, mat_x + hMat->getWidth(), mat_y + hMat->getHeight()/2 );
+    for (int i=0;i<kNumSwitches;i++)  {
+        matrix[i]=  new COnOffButton ( size, this, kSKey+i, hMat);
+        matrix[i]->setValue( effect->getParameter(kSKey+i) );
+        frame->addView( matrix[i] );
+        size.offset( 1 + hMat->getWidth(), 0 );
+    }
+    mat_y +=  hMat->getHeight()/2 + 2;
+    size (mat_x, mat_y, mat_x + kDisplayXWidth, mat_y + kDisplayHeight);
+	potiName = new CParamDisplay (size, hparBG, kCenterText);
+	potiName->setFont (kNormalFontSmall);
+	potiName->setFontColor (kYellowCColor);
+	potiName->setValue (effect->getParameter (kPotiName));
+	potiName->setStringConvert (poti2string);
+	frame->addView (potiName);
+
+    mat_y += (hparBG->getHeight() + 8);
+    int fmin = mat_x+3, fmax = mat_x+hparBG->getWidth()-4;
+    ringSwitch = new CHorizontalSlider (
+        CRect(mat_x,mat_y,mat_x+hparBG->getWidth(),mat_y+hparBG->getHeight()),
+        this, kRing, fmin, fmax, hFaderHandle, hparBG, point, kLeft);
+   	ringSwitch->setOffsetHandle (CPoint(0,4));
+
+	frame->addView (ringSwitch);
+*/
+
+// private muffleFilter class:
+struct _muff {
+    int   l, ll, w;
+    float sum;
+    float ring[50];
+    float walk( float m, float r ) {
+        l = (int)( r * 50 );
+        l = l > 0 ? l : 1;   // hell opened if i omit this !?
+        if ( l == ll ) {     // no need to recalculate the whole sum,
+            sum += m;        // add new entry
+            sum -= ring[w];  // sub last entry
+        } else {             // recalculate sum
+            sum = m;
+            ll  = l;         // save lastlen
+            for ( int i=0; i<l; i++ ) 
+                sum += ring[i];
+        }
+        ring[w] = m;
+        ++w %= l;
+        return sum/(l+1);
+    }
+} Muff;
+/*
+    waveKnob = new CKnob (size,this, kWave, hKnobBg, hKnobHandle, point);
+	waveKnob->setValue (effect->getParameter (kWave));
+	frame->addView (waveKnob);
+    int wx = 7, wy = 12;
+	waveDisp = new CMovieBitmap (
+        CRect (size.left + wx, size.top + wy,
+               size.left + wx + hWave->getWidth(),
+               size.top  + wy + hWave->getHeight()/kNumWaves ),
+        this, kWave, kNumWaves, 10, hWave, point);
+	waveDisp->setValue (effect->getParameter (kWave));
+	frame->addView (waveDisp);
+	size.offset( kKnobInc + hKnobBg->getWidth (), 0 );
+
+    lfoVal = new CMovieBitmap (
+        CRect (size.left, size.top,
+               size.left + hLfo->getWidth(),
+               size.top  + hLfo->getHeight()/8 ),
+        this, kPan, 8, 14, hLfo, point);
+	lfoVal->setValue (effect->getParameter (kPan));
+	frame->addView (lfoVal);
+	size.offset( kKnobInc + hLfo->getWidth (), 0 );
+*/
+/*
+//-----------------------------------------------------------------------------
+void p_analogEdit::setProgram (long index)
+{
+
+    p_analog::setProgram(index);
+    for(long i=0; i<kNRealPar; i++ ) {
+//        ((AEffGUIEditor*)editor)->setParameter( i, getParameter(i) );
+        ((p_Editor*)editor)->setParameter( i, getParameter(i) );
+    }
+    updateDisplay();
+}
+*/
+//    char t[200];
+//    sprintf( t, "%x : %d : %d %d %d %d", c->hi, id, s->left, s->top, s->right,s->bottom);
+//    MessageBox( NULL, t, ":)", MB_OK );
+//    frame->addView( c->hi );

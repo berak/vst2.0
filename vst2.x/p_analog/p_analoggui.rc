@@ -1,0 +1,18 @@
+#include <windows.h>
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Bitmap
+//
+
+128                     BITMAP  DISCARDABLE     "bg2.bmp"
+129                     BITMAP  DISCARDABLE     "rs0.bmp"
+130                     BITMAP  DISCARDABLE     "fad_h.bmp"
+131                     BITMAP  DISCARDABLE     "knob0.bmp"
+132                     BITMAP  DISCARDABLE     "knob1.bmp"
+133                     BITMAP  DISCARDABLE     "wave.bmp"
+134                     BITMAP  DISCARDABLE     "fil.bmp"
+135                     BITMAP  DISCARDABLE     "but_y.bmp"
+136                     BITMAP  DISCARDABLE     "strip.bmp"
+
